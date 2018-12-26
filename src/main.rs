@@ -1,4 +1,8 @@
+extern crate regex;
+
 use std::io;
+
+use regex::Regex;
 
 #[derive(Clone)]
 struct Register {
@@ -63,24 +67,27 @@ fn main() {
                 },
                 "exit" => break,
                 "quit" => break,
-                _ => println!("Command: {} not understood.", command)
-            }
-        } else {
-            let mut is_stored: bool = false;
-            for mut register in & mut memory.registers {
-                if register.empty {
-                    register.value = to_store.unwrap();
-                    register.empty = false;
-                    is_stored = true;
-                    break;
+                _ => {
+                    if Regex::new(r"([0-9]).+").unwrap().is_match(command.as_str()) {
+                        match command.split_at(command.len() - 1).0.parse::<i128>() {
+                            Ok(o) => {
+                                memory = store(memory, o);
+                                memory = operate(memory, command.split_at(command.len() - 1).1);
+                            },
+                            Err(_) => {},
+                        }
+                    }
+                    if Regex::new(r"[-+*/]").unwrap().is_match(command.as_str()) {
+                        memory = operate(memory, command.as_str());
+                    }
                 }
             }
-            if !is_stored {
-                memory.stack.push(to_store.unwrap());
-            }
+        } else {
+            memory = store(memory, to_store.unwrap());
         }
-        for register in &memory.registers {
-            println!("{}: {}", register.name, register.value);
+        for i in 0..memory.registers.len() {
+            let len = memory.registers.len() - 1;
+            println!("{}: {}", memory.registers[len - i].name, memory.registers[len - i].value);
         }
         if memory.stored_regs.is_some() {
             print!("S");
@@ -90,4 +97,43 @@ fn main() {
         }
         println!("");
     }
+}
+
+fn store(mut memory: Memory, to_store: i128) -> Memory {
+    let mut is_stored: bool = false;
+    for mut register in & mut memory.registers {
+        if register.empty {
+            register.value = to_store;
+            register.empty = false;
+            is_stored = true;
+            break;
+        }
+    }
+    if !is_stored {
+        memory.stack.push(to_store);
+    }
+    return memory;
+}
+
+fn operate(mut memory: Memory, operator: &str) -> Memory{
+    let operand_1: i128 = memory.registers[0].value;
+    let operand_2: i128 = memory.registers[1].value;
+    memory.registers[1].value = memory.registers[2].value;
+    if memory.registers[2].empty == true {
+        memory.registers[1].empty = true;
+    }
+    if memory.stack.is_empty() {
+        memory.registers[2].value = 0;
+        memory.registers[2].empty = true;
+    } else {
+        memory.registers[2].value = memory.stack.pop().unwrap();
+    }
+    match operator {
+        "+" => memory.registers[0].value = operand_1 + operand_2,
+        "-" => memory.registers[0].value = operand_1 - operand_2,
+        "*" => memory.registers[0].value = operand_1 * operand_2,
+        "/" => memory.registers[0].value = operand_1 / operand_2,
+        _ => {}
+    }
+    return memory;
 }
